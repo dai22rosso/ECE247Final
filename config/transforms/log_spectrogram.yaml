@@ -1,0 +1,56 @@
+# @package _global_
+to_tensor:
+  _target_: emg2qwerty.transforms.ToTensor
+  fields: [emg_left, emg_right]
+# channel_ablation:
+#   _target_: emg2qwerty.transforms.ChannelAblation
+#   keep_channels: 4
+
+amplitude_scaling:
+  _target_: emg2qwerty.transforms.RandomAmplitudeScaling
+  min_scale: 0.8
+  max_scale: 1.2
+
+# 👇 2. 定义电极丢弃
+channel_dropout:
+  _target_: emg2qwerty.transforms.RandomChannelDropout
+  drop_prob: 0.1
+band_rotation:
+  _target_: emg2qwerty.transforms.ForEach  # i.i.d rotation offset for each band
+  transform:
+    _target_: emg2qwerty.transforms.RandomBandRotation
+    offsets: [-1, 0, 1]
+
+temporal_jitter:
+  _target_: emg2qwerty.transforms.TemporalAlignmentJitter
+  max_offset: 120  # Max 60ms jitter for 2kHz EMG
+
+logspec:
+  _target_: emg2qwerty.transforms.LogSpectrogram
+  n_fft: 64
+  hop_length: 16  # Downsamples from 2kHz to 125Hz
+
+specaug:
+  _target_: emg2qwerty.transforms.SpecAugment
+  n_time_masks: 3
+  time_mask_param: 25  # Max 200ms per time mask for 125Hz spectrogram
+  n_freq_masks: 2
+  freq_mask_param: 4
+
+transforms:
+  train:
+    - ${to_tensor}
+    # - ${channel_ablation} #added
+    # - ${amplitude_scaling}  # <--- 在这里激活幅度缩放！
+    # - ${channel_dropout}    # <--- 在这里激活电极丢弃！
+    - ${band_rotation}
+    - ${temporal_jitter}
+    - ${logspec}
+    - ${specaug}
+
+  val:
+    - ${to_tensor}
+    # - ${channel_ablation} #added
+    - ${logspec}
+
+  test: ${transforms.val}

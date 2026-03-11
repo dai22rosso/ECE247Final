@@ -1,0 +1,20 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightning.CNNLSTMCTCModule  # 🎯 指向全新的独立类
+  in_features: 528
+  mlp_features: [384]
+  
+  # --- CNN 前端超参 ---
+  block_channels: [24, 24]
+  kernel_width: 32
+  
+  # --- LSTM 后端超参 ---
+  hidden_size: 512      # LSTM 冠军隐层维度
+  num_layers: 2         # 有了 CNN 打底，最多 2 层
+  bidirectional: true
+  dropout: 0.25         # LSTM 冠军 Dropout
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 4000
+  padding: [1800, 200]

@@ -1,0 +1,20 @@
+# @package _global_
+module:
+  _target_: emg2qwerty.lightning.CNNTransformerCTCModule
+  in_features: 528
+  mlp_features: [384]
+  
+  # --- CNN 前端 (负责降维和局部特征) ---
+  block_channels: [24, 24]
+  kernel_width: 32
+  
+  # --- Transformer 后端 (因为特征维度是 2*384=768，非常宽！) ---
+  nhead: 8              # 8 个注意力头
+  num_layers: 2         # 不要太深，2层或4层足以
+  dim_feedforward: 1024 # 前馈网络扩容维度
+  dropout: 0.1          # Transformer 的 Dropout 通常比较小
+
+datamodule:
+  _target_: emg2qwerty.lightning.WindowedEMGDataModule
+  window_length: 4000   # 🎯 极其重要：务必用短窗口缓解显存压力！
+  padding: [1800, 200]
