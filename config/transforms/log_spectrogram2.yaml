@@ -41,8 +41,8 @@ transforms:
     - ${to_tensor}
     # - ${channel_ablation} #added
     # - ${amplitude_scaling}  
-    # - ${channel_dropout}    
-    - ${band_rotation}
+    # - ${channel_dropout}   
+    # - ${band_rotation}
     - ${temporal_jitter}
     - ${logspec}
     - ${specaug}

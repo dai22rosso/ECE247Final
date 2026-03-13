@@ -7,7 +7,7 @@ module:
   num_channels: [512, 512, 512, 512]  
   kernel_size: 5
   dropout: 0.25
-  causal: false   # 🎯 默认使用非因果（Acausal）能看到未来的强大模式
+  causal: false   
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule

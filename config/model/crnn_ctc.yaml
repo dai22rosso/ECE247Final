@@ -1,21 +1,18 @@
 # @package _global_
 module:
   _target_: emg2qwerty.lightning.CRNNCTCModule
-  in_features: 528      # 保持 16 通道原始配置
+  in_features: 528      
   mlp_features: [384]
   
-  # --- CNN 前端超参 ---
-  # 将官方的 4 层削减到 2 层，防止过拟合，主要用于局部特征提取
   block_channels: [24, 24]
   kernel_width: 32
   
-  # --- GRU 后端超参 (沿用 Test CER 13.9% 的冠军配置) ---
   hidden_size: 512
-  num_layers: 2         # 有了 CNN 打底，2 层 GRU 足够建立全局上下文
+  num_layers: 2         
   bidirectional: true
   dropout: 0.5
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
-  window_length: 4000   # 沿用 CNN 验证过的最佳窗口长度
+  window_length: 4000   
   padding: [1800, 200]

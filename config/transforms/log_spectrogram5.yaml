@@ -40,7 +40,7 @@ transforms:
   train:
     - ${to_tensor}
     # - ${channel_ablation} #added
-    # - ${amplitude_scaling}  
+    - ${amplitude_scaling}  
     # - ${channel_dropout}    
     - ${band_rotation}
     - ${temporal_jitter}

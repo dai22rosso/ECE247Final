@@ -1,19 +1,17 @@
 # @package _global_
 module:
-  _target_: emg2qwerty.lightning.CNNRNNCTCModule  # 🎯 指向全新的独立类
+  _target_: emg2qwerty.lightning.CNNRNNCTCModule  
   in_features: 528
   mlp_features: [384]
   
-  # --- CNN 前端超参 ---
   block_channels: [24, 24]
   kernel_width: 32
   
-  # --- Vanilla RNN 后端超参 ---
-  nonlinearity: "relu"  # Vanilla RNN 续命神器
-  hidden_size: 256      # RNN 冠军隐层维度
-  num_layers: 2         # 有了 CNN，RNN 不要超过 2 层
+  nonlinearity: "relu"  
+  hidden_size: 256      
+  num_layers: 2        
   bidirectional: true
-  dropout: 0.25         # RNN 冠军 Dropout
+  dropout: 0.25        
 
 datamodule:
   _target_: emg2qwerty.lightning.WindowedEMGDataModule
