@@ -19,6 +19,10 @@ Most default settings are defined in `modules.py` and `lightning.py`, so no sour
 
 ---
 
+
+Run all the command in ./ECE247Final folder
+
+
 # 1. Architecture Experiments
 
 ## 1.1 CNN
@@ -280,6 +284,7 @@ in the corresponding training command.
 - Only command-line arguments need to be changed for architecture sweeps and ablations.
 
 ---
+
 
 
 
