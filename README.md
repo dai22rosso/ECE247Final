@@ -114,7 +114,7 @@ For architectures that require additional hyperparameters, add the corresponding
 - `module.num_layers={config['nl']}`
 - `module.hidden_size={config['hs']}`
 - `module.dropout={config['dp']}`
-- `module.activation={config['act']}`
+- `module.nonlinearity={config['act']}`
 
 A more complete template looks like this:
 
@@ -138,7 +138,7 @@ cmd = (
 For RNN-based models with activation:
 
 ```python
-cmd += f"module.activation={config['act']} "
+cmd += f"module.nonlinearity={config['act']} "
 ```
 
 ---
@@ -280,6 +280,7 @@ in the corresponding training command.
 - Only command-line arguments need to be changed for architecture sweeps and ablations.
 
 ---
+
 
 
 
