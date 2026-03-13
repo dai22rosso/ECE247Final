@@ -20,6 +20,8 @@ f"logspec.hop_length={ho} "
 "trainer.devices=1 "
 f"trainer.max_epochs={epochs} "
 "seed=1501"
+
+
 details seen in the ./emg2qwerty/sweep_rnn.py
 
 
@@ -37,3 +39,4 @@ details seen in the ./emg2qwerty/sweep_rnn.py
   "trainer.devices=1 "
   f"trainer.max_epochs={EPOCHS} "
   "seed=1501"
+
