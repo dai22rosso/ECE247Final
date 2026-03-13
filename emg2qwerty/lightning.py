@@ -283,10 +283,10 @@ class LSTMCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        hidden_size: int,       # LSTM 的隐藏层维度
-        num_layers: int,        # LSTM 的层数
-        bidirectional: bool,    # 是否双向
-        dropout: float,         # Dropout 概率
+        hidden_size: int,       
+        num_layers: int,        
+        bidirectional: bool,    
+        dropout: float,         
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -297,19 +297,15 @@ class LSTMCTCModule(pl.LightningModule):
         num_features = self.NUM_BANDS * mlp_features[-1]
         lstm_out_features = hidden_size * 2 if bidirectional else hidden_size
 
-        # Model 核心替换区
         self.model = nn.Sequential(
-            # 1. 频谱归一化
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
-            # 2. 旋转不变 MLP (提取通道特征)
+
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
                 mlp_features=mlp_features,
                 num_bands=self.NUM_BANDS,
             ),
-            # 3. 展平通道维度，准备送入时序模型
             nn.Flatten(start_dim=2),
-            # 4. === 这里替换成了 LSTM ===
             LSTMEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
@@ -317,12 +313,10 @@ class LSTMCTCModule(pl.LightningModule):
                 bidirectional=bidirectional,
                 dropout=dropout,
             ),
-            # 5. 线性层分类
             nn.Linear(lstm_out_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
 
-        # Criterion, Decoder, Metrics (和官方完全一致)
         self.ctc_loss = nn.CTCLoss(blank=charset().null_class)
         self.decoder = instantiate(decoder)
         metrics = MetricCollection([CharacterErrorRates()])
@@ -347,7 +341,6 @@ class LSTMCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # LSTM 不会改变时间维度长度，这里的 T_diff 自动为 0，完美兼容官方逻辑
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -436,7 +429,6 @@ class RNNCTCModule(pl.LightningModule):
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
-            # === 这里替换成了 RNN ===
             RNNEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
@@ -471,7 +463,6 @@ class RNNCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # RNN 不改变时间维度
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -559,7 +550,6 @@ class GRUCTCModule(pl.LightningModule):
                 num_bands=self.NUM_BANDS,
             ),
             nn.Flatten(start_dim=2),
-            # === 这里替换成了 GRU ===
             GRUEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
@@ -592,7 +582,6 @@ class GRUCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # RNN 不改变时间维度
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -659,12 +648,12 @@ class CRNNCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        block_channels: Sequence[int],  # CNN 前端的配置
-        kernel_width: int,              # CNN 前端的配置
-        hidden_size: int,               # GRU 后端的配置
-        num_layers: int,                # GRU 后端的配置
-        bidirectional: bool,            # GRU 后端的配置
-        dropout: float,                 # GRU 后端的配置
+        block_channels: Sequence[int],  
+        kernel_width: int,             
+        hidden_size: int,               
+        num_layers: int,                
+        bidirectional: bool,            
+        dropout: float,                 
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -672,13 +661,10 @@ class CRNNCTCModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        # TDSConvEncoder 的输出特征维度
         num_features = self.NUM_BANDS * mlp_features[-1]
-        # GRU 的最终输出特征维度
         gru_out_features = hidden_size * 2 if bidirectional else hidden_size
 
         self.model = nn.Sequential(
-            # 1. 基础特征提取
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
@@ -687,17 +673,12 @@ class CRNNCTCModule(pl.LightningModule):
             ),
             nn.Flatten(start_dim=2),
             
-            # 2. === CNN 前端 (TDSConv) ===
-            # 用于提取高频局部特征，并处理一部分时序感受野
             TDSConvEncoder(
                 num_features=num_features,
                 block_channels=block_channels,
                 kernel_width=kernel_width,
             ),
             
-            # 3. === GRU 后端 ===
-            # 接手 CNN 提取的特征，进行全局长程时序建模
-            # 注意：TDSConvEncoder 不改变 feature 维度，只改变 T
             GRUEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
@@ -706,7 +687,6 @@ class CRNNCTCModule(pl.LightningModule):
                 dropout=dropout,
             ),
             
-            # 4. 线性分类器
             nn.Linear(gru_out_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
@@ -731,8 +711,6 @@ class CRNNCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # 核心：CNN 前端会吃掉一部分时间维度（由 kernel_width 决定），GRU 不变
-        # 必须动态计算 T_diff 并更新 input_lengths 传给 CTCLoss
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -770,7 +748,6 @@ class CRNNCTCModule(pl.LightningModule):
         return self._step("val", *args, **kwargs)
 
     def test_step(self, *args, **kwargs) -> torch.Tensor:
-        # 延续之前极其重要的补丁：禁用 cuDNN 以防超长序列 OOM 或报错
         with torch.backends.cudnn.flags(enabled=False):
             return self._step("test", *args, **kwargs)
 
@@ -802,7 +779,7 @@ class TCNCTCModule(pl.LightningModule):
         num_channels: Sequence[int],
         kernel_size: int,
         dropout: float,
-        causal: bool,                   # 🎯 接收 YAML 传来的因果开关
+        causal: bool,                   
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -820,13 +797,12 @@ class TCNCTCModule(pl.LightningModule):
             ),
             nn.Flatten(start_dim=2),
             
-            # === 将 causal 开关传递给底层的 TCN 引擎 ===
             TCNEncoder(
                 num_features=num_features,
                 num_channels=num_channels,
                 kernel_size=kernel_size,
                 dropout=dropout,
-                causal=causal,          # 🎯 传递参数
+                causal=causal,          
             ),
             
             nn.Linear(tcn_out_features, charset().num_classes),
@@ -844,7 +820,6 @@ class TCNCTCModule(pl.LightningModule):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.model(inputs)
 
-    # ...后面的 _step, training_step 等方法完全保持不变，直接沿用刚才写的即可...
     def _step(self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
         inputs = batch["inputs"]
         targets = batch["targets"]
@@ -917,13 +892,13 @@ class CNNRNNCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        block_channels: Sequence[int],  # CNN 前端的配置
-        kernel_width: int,              # CNN 前端的配置
-        hidden_size: int,               # Vanilla RNN 后端的配置
-        num_layers: int,                # Vanilla RNN 后端的配置
-        bidirectional: bool,            # Vanilla RNN 后端的配置
-        dropout: float,                 # Vanilla RNN 后端的配置
-        nonlinearity: str,              # 🎯 Vanilla RNN 专属的激活函数
+        block_channels: Sequence[int],  
+        kernel_width: int,              
+        hidden_size: int,             
+        num_layers: int,               
+        bidirectional: bool,          
+        dropout: float,                
+        nonlinearity: str,              
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -935,7 +910,6 @@ class CNNRNNCTCModule(pl.LightningModule):
         rnn_out_features = hidden_size * 2 if bidirectional else hidden_size
 
         self.model = nn.Sequential(
-            # 1. 基础特征提取
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
@@ -944,24 +918,21 @@ class CNNRNNCTCModule(pl.LightningModule):
             ),
             nn.Flatten(start_dim=2),
             
-            # 2. === CNN 前端 (TDSConv) ===
             TDSConvEncoder(
                 num_features=num_features,
                 block_channels=block_channels,
                 kernel_width=kernel_width,
             ),
             
-            # 3. === Vanilla RNN 后端 ===
             RNNEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
                 num_layers=num_layers,
                 bidirectional=bidirectional,
                 dropout=dropout,
-                nonlinearity=nonlinearity, # 注入 RNN 专属激活函数
+                nonlinearity=nonlinearity, 
             ),
             
-            # 4. 线性分类器
             nn.Linear(rnn_out_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
@@ -986,7 +957,6 @@ class CNNRNNCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # CNN 会缩短时间维度
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -1024,7 +994,6 @@ class CNNRNNCTCModule(pl.LightningModule):
         return self._step("val", *args, **kwargs)
 
     def test_step(self, *args, **kwargs) -> torch.Tensor:
-        # 禁用 cuDNN 护航测试集超长序列
         with torch.backends.cudnn.flags(enabled=False):
             return self._step("test", *args, **kwargs)
 
@@ -1053,12 +1022,12 @@ class CNNLSTMCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        block_channels: Sequence[int],  # CNN 前端的配置
-        kernel_width: int,              # CNN 前端的配置
-        hidden_size: int,               # LSTM 后端的配置
-        num_layers: int,                # LSTM 后端的配置
-        bidirectional: bool,            # LSTM 后端的配置
-        dropout: float,                 # LSTM 后端的配置
+        block_channels: Sequence[int],  
+        kernel_width: int,              
+        hidden_size: int,              
+        num_layers: int,               
+        bidirectional: bool,            
+        dropout: float,                 
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
         decoder: DictConfig,
@@ -1070,7 +1039,6 @@ class CNNLSTMCTCModule(pl.LightningModule):
         lstm_out_features = hidden_size * 2 if bidirectional else hidden_size
 
         self.model = nn.Sequential(
-            # 1. 基础特征提取
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
                 in_features=in_features,
@@ -1079,14 +1047,12 @@ class CNNLSTMCTCModule(pl.LightningModule):
             ),
             nn.Flatten(start_dim=2),
             
-            # 2. === CNN 前端 (TDSConv) ===
             TDSConvEncoder(
                 num_features=num_features,
                 block_channels=block_channels,
                 kernel_width=kernel_width,
             ),
             
-            # 3. === LSTM 后端 ===
             LSTMEncoder(
                 num_features=num_features,
                 hidden_size=hidden_size,
@@ -1095,7 +1061,6 @@ class CNNLSTMCTCModule(pl.LightningModule):
                 dropout=dropout,
             ),
             
-            # 4. 线性分类器
             nn.Linear(lstm_out_features, charset().num_classes),
             nn.LogSoftmax(dim=-1),
         )
@@ -1120,7 +1085,6 @@ class CNNLSTMCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # 核心：CNN 会吞掉一部分时间维度，计算 T_diff
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -1158,7 +1122,6 @@ class CNNLSTMCTCModule(pl.LightningModule):
         return self._step("val", *args, **kwargs)
 
     def test_step(self, *args, **kwargs) -> torch.Tensor:
-        # 禁用 cuDNN 护航测试集超长序列
         with torch.backends.cudnn.flags(enabled=False):
             return self._step("test", *args, **kwargs)
 
@@ -1190,11 +1153,11 @@ class CNNTransformerCTCModule(pl.LightningModule):
         self,
         in_features: int,
         mlp_features: Sequence[int],
-        block_channels: Sequence[int],  # CNN 前端配置
-        kernel_width: int,              # CNN 前端配置
-        nhead: int,                     # 🎯 Transformer 头数
-        num_layers: int,                # 🎯 Transformer 层数
-        dim_feedforward: int,           # 🎯 Transformer 内部 MLP 维度
+        block_channels: Sequence[int],  
+        kernel_width: int,              
+        nhead: int,                     
+        num_layers: int,                
+        dim_feedforward: int,           
         dropout: float,
         optimizer: DictConfig,
         lr_scheduler: DictConfig,
@@ -1205,7 +1168,6 @@ class CNNTransformerCTCModule(pl.LightningModule):
 
         num_features = self.NUM_BANDS * mlp_features[-1]
 
-        # 1. 基础特征提取 & CNN 前端
         self.frontend = nn.Sequential(
             SpectrogramNorm(channels=self.NUM_BANDS * self.ELECTRODE_CHANNELS),
             MultiBandRotationInvariantMLP(
@@ -1217,20 +1179,17 @@ class CNNTransformerCTCModule(pl.LightningModule):
             ),
         )
 
-        # 2. 位置编码 (Transformer 的灵魂)
         self.pos_encoder = PositionalEncoding(d_model=num_features, dropout=dropout)
 
-        # 3. Transformer 后端
         encoder_layers = nn.TransformerEncoderLayer(
             d_model=num_features, 
             nhead=nhead, 
             dim_feedforward=dim_feedforward, 
             dropout=dropout,
-            activation="gelu"  # 现代 Transformer 标配
+            activation="gelu"  
         )
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
 
-        # 4. 分类器
         self.classifier = nn.Sequential(
             nn.Linear(num_features, charset().num_classes),
             nn.LogSoftmax(dim=-1)
@@ -1245,13 +1204,9 @@ class CNNTransformerCTCModule(pl.LightningModule):
         })
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        # 1. CNN 提取特征
         x = self.frontend(inputs)
-        # 2. 注入位置编码
         x = self.pos_encoder(x)
-        # 3. Transformer 全局注意力建模
         x = self.transformer_encoder(x)
-        # 4. 预测
         return self.classifier(x)
 
     def _step(self, phase: str, batch: dict[str, torch.Tensor], *args, **kwargs) -> torch.Tensor:
@@ -1263,7 +1218,6 @@ class CNNTransformerCTCModule(pl.LightningModule):
 
         emissions = self.forward(inputs)
 
-        # CNN 会缩短时间维度
         T_diff = inputs.shape[0] - emissions.shape[0]
         emission_lengths = input_lengths - T_diff
 
@@ -1287,7 +1241,6 @@ class CNNTransformerCTCModule(pl.LightningModule):
         self.log(f"{phase}/loss", loss, batch_size=N, sync_dist=True)
         return loss
 
-    # 省略常规的 epoch_end, training_step 等（与之前完全一致）
     def _epoch_end(self, phase: str) -> None:
         metrics = self.metrics[f"{phase}_metrics"]
         self.log_dict(metrics.compute(), sync_dist=True)

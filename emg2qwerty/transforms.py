@@ -264,16 +264,6 @@ class SpecAugment:
         return x.movedim(-1, 0)
 
 
-# @dataclass
-# class ChannelAblation:
-#     """Keep only a subset of electrode channels."""
-#     keep_channels: int = 4
-#     channel_dim: int = 2 # In ToTensor, output is (T, bands=2, channels=16)
-
-#     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-#         # 比如只保留前 8 个通道: x[:, :, :8]
-#         # 或者每隔一个取一个: x[:, :, ::2]
-#         return tensor[:, :, :self.keep_channels]
 
 
 @dataclass
@@ -283,19 +273,14 @@ class RandomAmplitudeScaling:
     max_scale: float = 1.2
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        # tensor 形状通常为 (T, bands, channels)
-        # 生成一个 [min_scale, max_scale] 之间的随机缩放因子
         scale = torch.empty(1).uniform_(self.min_scale, self.max_scale).item()
         return tensor * scale
 
 @dataclass
 class RandomChannelDropout:
     """Randomly zero out electrode channels to simulate sensor failure/poor contact."""
-    drop_prob: float = 0.1  # 默认每个电极有 10% 的概率失效
+    drop_prob: float = 0.1  
 
     def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
-        # tensor 形状通常为 (T, bands, channels)
-        # 针对每个通道生成随机 mask
         mask = torch.rand(tensor.shape[1:]) > self.drop_prob
-        # 在时间维度 (T) 上广播 mask 并应用
         return tensor * mask.unsqueeze(0)

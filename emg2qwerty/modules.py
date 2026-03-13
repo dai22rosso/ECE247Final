@@ -279,7 +279,6 @@ class TDSConvEncoder(nn.Module):
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         return self.tds_conv_blocks(inputs)  # (T, N, num_features)
 class LSTMEncoder(nn.Module):
-    """A standard LSTM encoder to replace the TDSConvEncoder."""
     
     def __init__(
         self,
@@ -307,7 +306,6 @@ class LSTMEncoder(nn.Module):
         # outputs, _ = self.lstm(inputs)
         self.lstm.flatten_parameters()
         
-        # 2. 临时禁用 cuDNN：安全通过 Test 阶段的几万长度超长序列！
         # with torch.backends.cudnn.flags(enabled=False):
         outputs, _ = self.lstm(inputs)
 
@@ -315,7 +313,6 @@ class LSTMEncoder(nn.Module):
 
 
 class RNNEncoder(nn.Module):
-    """A standard vanilla RNN encoder."""
     
     def __init__(
         self,
@@ -328,14 +325,13 @@ class RNNEncoder(nn.Module):
     ) -> None:
         super().__init__()
         
-        # 使用基础的 nn.RNN
         self.rnn = nn.RNN(
             input_size=num_features,
             hidden_size=hidden_size,
             num_layers=num_layers,
             bidirectional=bidirectional,
             dropout=dropout if num_layers > 1 else 0.0,
-            nonlinearity=nonlinearity,  # 使用指定的激活函数
+            nonlinearity=nonlinearity,  
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -346,14 +342,12 @@ class RNNEncoder(nn.Module):
 
         self.rnn.flatten_parameters()
         
-        # # 2. 临时禁用 cuDNN：安全通过 Test 阶段的几万长度超长序列！
         # with torch.backends.cudnn.flags(enabled=False):
         outputs, _ = self.rnn(inputs)
         return outputs
     
 
 class GRUEncoder(nn.Module):
-    """A standard GRU encoder."""
     
     def __init__(
         self,
@@ -365,7 +359,6 @@ class GRUEncoder(nn.Module):
     ) -> None:
         super().__init__()
         
-        # 使用 nn.GRU
         self.gru = nn.GRU(
             input_size=num_features,
             hidden_size=hidden_size,
@@ -385,8 +378,6 @@ class GRUEncoder(nn.Module):
 import math
 
 class PositionalEncoding(nn.Module):
-    """注入序列的位置信息，这对 Transformer 至关重要。"""
-    # 🎯 INCREASE max_len significantly to handle the unwindowed test set
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 100000):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -400,7 +391,6 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x shape: (T, N, C)
-        # 🎯 It's always good practice to ensure we only slice what we need
         seq_len = x.size(0)
         
         # Add a safety check just in case it ever exceeds the massive buffer
@@ -410,7 +400,6 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[:seq_len]
         return self.dropout(x)
 class TCNBlock(nn.Module):
-    """一个通用的 TCN 残差块，支持因果（Causal）和非因果（Acausal/Symmetric）模式。"""
     def __init__(
         self, 
         in_channels: int, 
@@ -424,14 +413,11 @@ class TCNBlock(nn.Module):
         self.causal = causal
         
         if self.causal:
-            # 🎯 因果模式：为了让左边填满历史信息，padding 设为 (k-1)*d
             self.padding = (kernel_size - 1) * dilation
         else:
-            # 🎯 非因果模式：两边对称 padding
             assert kernel_size % 2 == 1, "Kernel size must be odd for symmetric acausal padding."
             self.padding = (kernel_size - 1) * dilation // 2
 
-        # 无论哪种模式，Conv1d 默认会在左右两边都加上 self.padding
         self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size,
                                padding=self.padding, dilation=dilation)
         self.relu1 = nn.ReLU()
@@ -447,7 +433,6 @@ class TCNBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.conv1(x)
-        # 🎯 核心魔法 (Chomp)：如果是因果模式，切掉右边多算出来的“未来”时间步
         if self.causal and self.padding > 0:
             out = out[:, :, :-self.padding]
             
@@ -466,21 +451,19 @@ class TCNBlock(nn.Module):
 
 
 class TCNEncoder(nn.Module):
-    """标准的 TCN 编码器，集成因果/非因果开关。"""
     def __init__(
         self,
         num_features: int,
         num_channels: Sequence[int],
         kernel_size: int = 3,
         dropout: float = 0.2,
-        causal: bool = False,  # 🎯 暴露因果开关给外层
+        causal: bool = False,  
     ) -> None:
         super().__init__()
         layers = []
         num_levels = len(num_channels)
         
         for i in range(num_levels):
-            # 感受野随着层数呈 1, 2, 4, 8... 指数级爆炸增长
             dilation_size = 2 ** i
             in_channels = num_features if i == 0 else num_channels[i-1]
             out_channels = num_channels[i]
@@ -491,7 +474,6 @@ class TCNEncoder(nn.Module):
         self.network = nn.Sequential(*layers)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        # inputs shape: (T, N, num_features)
-        x = inputs.movedim(0, -1)  # 转换给 Conv1d 使用: (N, num_features, T)
+        x = inputs.movedim(0, -1)  
         x = self.network(x)
-        return x.movedim(-1, 0)    # 转回 CTC 需要的形状: (T, N, out_channels)
+        return x.movedim(-1, 0)   
