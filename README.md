@@ -3,6 +3,7 @@
 **Winter 2026**  
 Final project for **ECE C147/C247** at **UCLA**.
 
+
 ---
 
 ## Training Overview
@@ -275,9 +276,10 @@ in the corresponding training command.
 # 3. Notes
 
 - All major architecture settings are already defined in `modules.py` and `lightning.py`.
-- No manual code modification is required for standard experiment runs.
+- I use NVIDIA RTX 5090 GPU for this project. The old version of pytorch in original repo can't be applied on it, so I install new pytorch and make some essential changes in the code to make it run normally. I change the Test period codes, like loading weight and don't use cuDNN library in it, but all the logics are the same.
 - Only command-line arguments need to be changed for architecture sweeps and ablations.
 
 ---
+
 
 
